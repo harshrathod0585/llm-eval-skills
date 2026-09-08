@@ -1,0 +1,6 @@
+# Source transcripts are third-party lecture content — never commit
+eval-transcripts/
+*.srt
+*.vtt
+transcripts/
+notes/

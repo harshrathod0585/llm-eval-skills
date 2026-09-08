@@ -1,0 +1,11 @@
+{
+  "name": "eval",
+  "version": "0.1.0",
+  "description": "LLM evaluation toolkit: foundations (what to measure), benchmark (which model to pick), rag (staged RAG eval pipeline).",
+  "author": { "name": "harshrathod" },
+  "license": "MIT",
+  "homepage": "https://github.com/harshrathod0585/llm-eval-skills",
+  "repository": "https://github.com/harshrathod0585/llm-eval-skills",
+  "keywords": ["llm", "evaluation", "rag", "benchmark", "g-eval", "deepeval"],
+  "skills": "./skills/"
+}
