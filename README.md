@@ -1,17 +1,8 @@
 # LLM Eval Skills
 
-Six Claude Code skills for evaluating LLM applications — from deciding what to measure, through picking a model, to running a gated regression suite in CI.
+Six Claude Code skills for evaluating LLM applications. You point them at a codebase and say *"set up evals"*; they read the code, propose a staged plan you approve, then build the smallest useful suite.
 
-Split by **what they apply to**, not by the order they're taught. Only one of them is RAG-specific; the rest work for agents, chatbots, and classifiers too.
-
-| Skill | Scope | Applies to |
-|---|---|---|
-| `eval:foundations` | Eval strategy — what to measure, programmatic vs human vs LLM-judge, reference-based vs reference-free, offline vs online, golden datasets, production monitoring and drift | any LLM app |
-| `eval:benchmark` | Model selection — benchmark catalogue with saturation/contamination status, leaderboard biases, cost and latency modeling, custom bake-offs | any |
-| `eval:rag` | **Retrieval only** — retriever and generator metrics, the RAG Triad, chunking/embedding/reranker levers, diagnostic tree | RAG |
-| `eval:geval` | Custom judgment metrics — G-Eval mechanism, `evaluation_params` semantics, worked correctness / completeness / style | any |
-| `eval:safety` | Toxicity, PII and content leakage, scope drift, prompt injection, red teaming, guardrail layers | any |
-| `eval:ops` | Latency, cost, reliability, regression testing with noise thresholds, CI deploy gating | any |
+Works for RAG, agents, classifiers, extraction, summarization, chatbots, and applications that combine them — not just RAG.
 
 ## Install
 
@@ -20,30 +11,69 @@ claude plugin marketplace add harshrathod0585/llm-eval-skills
 claude plugin install eval@eval
 ```
 
-**New to this? Start with `/eval:foundations`** — it carries the end-to-end walkthrough and routes you into the others at the right stage.
+Then, in any project:
 
-Invoke with `/eval:rag`, `/eval:geval`, etc. — or just describe the problem and the right skill triggers.
+> Set up evals for this project.
 
-## Why the split
+`eval:foundations` is the entry point. It loads the others as the plan requires them.
 
-The lectures this came from teach safety, ops, and G-Eval inside a RAG project, because that's the running example. But none of them are retrieval concepts: an agent needs prompt-injection testing more than a RAG bot does, and every LLM app has a cost and latency budget. Filing them under RAG would hide them from everyone not building RAG.
+## The journey
 
-What's genuinely RAG-only is the part that requires a retriever — contextual precision/recall/relevancy, faithfulness, the Triad, and the chunking levers that move them.
+```
+Discover  →  read the code, trace real request flows, inventory existing tests
+Plan      →  three stage tables you approve or adjust, before anything is written
+Stage 1   →  component evals   — each part checked in isolation
+Stage 2   →  pipeline evals    — the connected flow
+Stage 3   →  application evals — correctness, completeness, safety, operations
+Online    →  currently unavailable, and stated as such rather than stubbed
+```
+
+One stage at a time, with results explained before the next begins. Say *"continue my eval setup"* later and it resumes from where it stopped.
+
+The plan you approve looks like this — populated from your actual code, not a template:
+
+| Component | Evaluations | Dataset / evidence | Proposed file |
+|---|---|---|---|
+| Retriever | Context relevance | Questions + actual retrieved passages | `evals/components/test_retrieval.py` |
+| Generator | Faithfulness, answer relevance | Questions + reviewed controlled context | `evals/components/test_generation.py` |
+
+## The skills
+
+| Skill | Scope | Applies to |
+|---|---|---|
+| `eval:foundations` | **Entry point** — discovery, the staged plan, dataset preparation, running and reporting | any |
+| `eval:rag` | Retriever and generator metrics, the RAG Triad, chunking and reranker levers | RAG |
+| `eval:geval` | Custom judgment metrics — G-Eval mechanism, correctness, completeness | any |
+| `eval:safety` | Toxicity, leakage, scope drift, injection, authorization | any |
+| `eval:ops` | Latency, cost, reliability; regression gating when requested | any |
+| `eval:benchmark` | Model selection — benchmarks, leaderboards, cost modeling, bake-offs | any |
+
+Only `eval:rag` is retrieval-specific. Safety and operations are dimensions of the application stage, not RAG concepts — an agent needs injection testing and a cost budget as much as a RAG app does.
+
+## Design principles
+
+**Minimal by default.** One eval per distinct failure mode, not one per function. The starter suite for a RAG chatbot is the triad plus a few correctness cases — no registry, no CI, no bake-off unless the workflow asks for it.
+
+**Evidence, not vibes.** Deterministic checks wherever an outcome is directly verifiable; LLM judging only where judgment is genuinely required. An authorization assertion beats asking a judge whether a response sounds safe.
+
+**Honest about what a score establishes.** Synthetic labels stay *candidates* until reviewed. Held-out cases stay separate from tuning. A small passing run is not proof of production reliability, and the skills say so rather than declaring success.
+
+**Distinctions that matter, kept distinct.** Faithfulness is not correctness — an answer can be perfectly grounded in a source that is wrong. Relevance is not completeness. The RAG Triad establishes neither.
 
 ## Where the depth is
 
-- `eval:foundations` → `references/discovery.md` — read a codebase, classify the app, derive the plan
-- `eval:foundations` → `references/end-to-end.md` — the whole build, stage 0 to 8, with project layout
-- `eval:foundations` → `references/golden-datasets.md` — dataset shape per metric, and the chunk-ID trap
-- `eval:rag` → `references/metrics.md` — every metric: which test-case fields it needs, how it's computed, what a low score implies, and the ranked-precision worked example
-- `eval:geval` — why naive "score this 1–10" judging swings between runs, and the two things G-Eval does about it
-- `eval:ops` — 2×stddev noise thresholds, and why you must register each metric's direction before comparing anything
+- `eval:foundations` → `references/discovery.md` — trace, classify, choose the minimum useful method
+- `eval:foundations` → `references/end-to-end.md` — plan format, worked example, implementation loop
+- `eval:foundations` → `references/golden-datasets.md` — evidence per check, case contract, validation
+- `eval:rag` → `references/metrics.md` — every metric: fields, computation, what a low score implies
 
 ## Source
 
-Method distilled from [CampusX's "Master LLM Evaluations" playlist](https://youtube.com/playlist?list=PLEneLIDJFpcA) (18 lectures, free). The skills are original writing — a restructuring of the method into agent-followable form — not a transcript. No lecture content is redistributed here.
+The RAG metrics, G-Eval, safety, and operational material is distilled from [CampusX's "Master LLM Evaluations" playlist](https://youtube.com/playlist?list=PLEneLIDJFpcA) (18 lectures, free). The skills are original writing, not a transcript, and no lecture content is redistributed.
 
-Code examples were reconstructed against DeepEval's documented API rather than transcribed from lecture audio, so verify signatures against your installed version.
+Codebase discovery, non-RAG component selection, the minimal staged workflow, and dataset validation are maintained guidance rather than lecture coverage — they're marked as such in the skills so nothing is misattributed.
+
+Verify DeepEval APIs against your installed version; the skills link official docs and tell the agent to check before writing code.
 
 ## License
 

@@ -2,10 +2,12 @@
 name: ops
 description: Measure and control an LLM application's latency, cost, and reliability, and catch silent quality regressions with a baseline-comparison suite wired into CI. Covers percentile latency and TTFT instrumentation, per-component breakdown, token cost modeling, error categorization, concrete cost/latency optimization tactics, metric registries with direction and noise thresholds, and baseline/compare/promote deploy gating. Use whenever someone asks about LLM app latency, cost per query, token spend, reliability, SLOs, performance regressions, eval gates in CI/CD, or how to know whether a change made things worse — including symptom phrasings like "it got slower after I changed the model", "this is costing too much", or "how do I stop shipping regressions". Applies to any LLM app, not just RAG.
 created_at: 2026-09-08T12:27:56Z
-updated_at: 2026-09-08T12:27:56Z
+updated_at: 2026-09-08T13:10:00Z
 ---
 
 # Operational Evals and Regression Testing
+
+**Two things live here, with different defaults.** Operational measurement — latency, cost, reliability — is a dimension of the application stage and should be instrumented on runs you are already doing; it costs almost nothing extra. The regression machinery further down — metric registry, baseline/compare/promote, CI gating — is **opt-in**. Build it when the user asks for a regression gate or when more than one person is changing the system, not as part of a starter suite.
 
 ## Operational evals
 
@@ -66,6 +68,8 @@ The central tradeoff: adding a reranker, raising `k`, and swapping to a larger m
 - Prompt caching, which helps most when a large static block repeats verbatim. Note it helps RAG chatbots *less* than you'd hope, since retrieved context changes every query.
 
 ## Regression testing
+
+Build this when it's requested or when uncoordinated changes are actually causing regressions. A saved baseline and a per-metric comparison are enough until then; the registry, promote script, and CI wiring are the mature form, not the starting point.
 
 Regression = the system returning to a worse state. RAG regresses silently because optimizing one metric routinely degrades others nobody was watching — you add a reranker and raise `k` to fix recall, and precision, contextual relevancy, and latency all quietly get worse.
 

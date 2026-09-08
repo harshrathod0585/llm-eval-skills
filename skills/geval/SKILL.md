@@ -2,7 +2,7 @@
 name: geval
 description: Build custom LLM-as-judge metrics that are stable enough to track across runs, using G-Eval. Covers why naive "score this 1-10" judging swings wildly between identical runs, what G-Eval's chain-of-thought evaluation steps and probability-weighted scoring actually fix, how evaluation_params determines what a metric really measures, criteria vs evaluation_steps vs rubric, and worked correctness / completeness / style metrics. Use whenever someone needs a metric that isn't built in — correctness, completeness, style, tone, helpfulness, coherence, domain-specific quality, or a custom safety check — or mentions G-Eval, LLM-as-judge, DeepEval custom metrics, or judge rubrics. Also use when someone's LLM judge gives inconsistent scores on unchanged inputs, when they're deciding which test-case fields a metric should compare, or when they want to combine several quality metrics into one score.
 created_at: 2026-09-08T12:27:56Z
-updated_at: 2026-09-08T12:27:56Z
+updated_at: 2026-09-08T13:10:00Z
 ---
 
 # G-Eval: Custom Judgment Metrics

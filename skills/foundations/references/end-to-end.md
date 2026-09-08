@@ -1,190 +1,90 @@
-# Building an eval suite end to end
+# The staged evaluation journey
 
-The complete thread from an empty repo to a CI-gated regression suite. Each stage produces something runnable before the next begins — the same discipline as writing a function and testing it before writing the next one, rather than building the whole app and testing at the end.
+Discovery and plan review come first; dataset preparation happens before each consuming stage. The three evaluation stages are **component → pipeline → application**. Online evaluation is currently unavailable. Regression/CI is optional follow-up, not a prerequisite for completing the offline setup.
 
-Read this when you need the whole shape. The per-stage detail lives in the sibling skills, named at each step.
+## Plan format
 
-## Project layout
+Begin with the detected application, actual request flow, intended user outcome, and supporting code references. Use these table columns, replacing generic labels with concrete findings:
 
-```
-project/
-├── data/                       raw source documents
-├── src/
-│   ├── retriever.py            load → chunk → embed → store → retrieve
-│   ├── reranker.py             reorders retrieved chunks
-│   ├── generator.py            (question, context) → answer
-│   └── rag_pipeline.py         glue: retriever → generator
-├── goldens/
-│   ├── retriever_goldens.json      question + ideal_answer
-│   ├── faithfulness_goldens.json   question + golden_context
-│   ├── correctness_goldens.json    question + ideal_answer
-│   ├── toxicity_goldens.json       adversarial / benign / mixed
-│   ├── leakage_goldens.json        + expected_action
-│   └── scope_goldens.json          + expected_action
-├── evals/
-│   ├── eval_retriever.py       stage 1a
-│   ├── eval_generator.py       stage 1b
-│   ├── eval_rag_pipeline.py    stage 2
-│   ├── eval_application.py     stage 3 quality
-│   ├── eval_safety.py          stage 3 safety
-│   ├── eval_ops.py             stage 4 operational
-│   └── harness.py              standardizes run()/output across eval files
-├── metric_registry.py          direction + noise threshold per metric
-├── run_suite.py                runs everything, emits one JSON
-├── compare.py                  baseline vs candidate → improved/flat/regressed
-├── promote.py                  → approve | review | block
-└── baselines/
-    └── baseline.json
-```
+### Stage 1 — Component evaluation
 
-Two structural notes that pay off later. Give every eval file a `run()` function rather than top-level procedural code under `if __name__ == "__main__"` — otherwise `run_suite.py` can't drive them. And keep the four quality evals as separate files while merging the three safety and three ops evals into one file each; the quality evals are edited constantly during tuning, the others aren't.
+| Component | Evaluations | Dataset / evidence | Proposed file |
+|---|---|---|---|
+| Independently useful boundary found in code | Minimum check and method | Required labels or controlled inputs | Actual proposed path |
 
-## Stage 0 — understand the system you're evaluating
+End with the outcome: what failures this stage can localize.
 
-Before any code. Skipping this produces an eval suite that measures whatever was easy to measure.
+### Stage 2 — Pipeline evaluation
 
-**If the app already exists, read it first.** Trace the entry point to the response and let that path define the components — don't assume the decomposition. `references/discovery.md` covers the inspection pass, how to classify the app type from its dependencies, and what to inventory before proposing anything. The layout above is RAG-shaped because that's the worked example; an agent or a classifier decomposes differently, and only stages 2–3 change.
+| Connected flow | Evaluations | Dataset / evidence | Proposed file |
+|---|---|---|---|
+| Actual connected execution path | Combined behavior check and method | Runtime outputs + expected behavior | Actual proposed path |
 
-Then answer:
+End with the outcome: what integration failures this stage can reveal.
 
-1. What is the task, exactly?
-2. What are the success criteria, stated as metrics or rubrics?
-3. Which risk categories are actually in scope — quality always, safety and ops selectively? Write a short safety policy naming the failure modes that matter for *this* app. A no-tools internal bot and a public agent have genuinely different attack surfaces.
-4. What are the latency and cost budgets, as numbers?
+### Stage 3 — Application evaluation
 
-→ `eval:foundations` for the decision framework, `eval:benchmark` if the model isn't chosen yet.
+| User journey / requirement | Evaluations | Dataset / evidence | Proposed file |
+|---|---|---|---|
+| Intended task | Correctness and completeness | Reviewed answers, required points, or expected final state | Quality/journey eval file |
+| Applicable policy or access boundary | Safety | Expected allowed/forbidden behavior, benign controls | Safety eval file if distinct fixtures justify it |
+| Same representative requests | Operations: latency, cost, reliability | Timing, usage, errors, timeouts | Instrument existing run; separate file only if useful |
 
-## Stage 1 — golden datasets
+End with the outcome: whether users can complete tasks correctly, completely, safely, and within measured operational constraints. State any dimension that is inapplicable and why. Style, tone, citation accuracy, and other checks are conditional on actual requirements.
 
-Build these before the evals that consume them. Detail in `references/golden-datasets.md`.
+Finish with dataset readiness/review needs, shared data, methods and why, proposed thresholds versus confirmed requirements, estimated run cost (or unknown and how to measure it), and the next action. State **online evaluation: currently unavailable**. Ask for agreement on the concrete plan, not a generic permission to start.
 
-The minimum to start: `question + ideal_answer` (15–50 rows) and `question + golden_context` (15–50 rows). Safety sets come later, at stage 5.
+## Worked example: a RAG chatbot
 
-## Stage 2 — component evals
+Illustration only: suppose source inspection establishes question → retrieval → generation → chat response, with follow-up support. Replace these names/paths and add source references in a real plan. Do not invent conversation history, permissions, or tools if absent.
 
-**2a. Build the retriever**, smoke-test it with one query, then evaluate it alone.
+### Stage 1 — Component evaluation
 
-```python
-# evals/eval_retriever.py
-cases = [
-    LLMTestCase(
-        input=row["question"],
-        expected_output=row["ideal_answer"],
-        retrieval_context=[d.page_content for d in retriever.invoke(row["question"])],
-        actual_output="",
-    )
-    for row in load_goldens("retriever_goldens.json")
-]
-evaluate(cases, [ContextualRecallMetric(...), ContextualPrecisionMetric(...)])
-```
+| Component | Evaluations | Dataset / evidence | Proposed file |
+|---|---|---|---|
+| Retriever | Context relevance (DeepEval) | Questions + actual retrieved passages | `evals/components/test_retrieval.py` |
+| Generator | Faithfulness, answer relevance (DeepEval) | Questions + reviewed controlled context | `evals/components/test_generation.py` |
 
-Record the baseline, then tune one variable at a time — chunk size, then reranker, then embedding model, then `k` — re-running after each. Delete and rebuild the vector store whenever chunking changes, or you're measuring the old index.
+> Outcome: distinguish poor retrieval from poor use of adequate context. Add recall only for a coverage requirement or observed missing evidence, with suitable labels.
 
-**2b. Build the generator**, then evaluate it **fed golden context, not the retriever**. This isolation is the whole point of stage 2b; wiring in the real retriever here makes every failure ambiguous.
+### Stage 2 — Pipeline evaluation
 
-```python
-# evals/eval_generator.py
-cases = [
-    LLMTestCase(
-        input=row["question"],
-        retrieval_context=row["golden_context"],
-        actual_output=generate(row["question"], row["golden_context"]),
-    )
-    for row in load_goldens("faithfulness_goldens.json")
-]
-evaluate(cases, [FaithfulnessMetric(...), AnswerRelevancyMetric(...)])
-```
+| Connected flow | Evaluations | Dataset / evidence | Proposed file |
+|---|---|---|---|
+| Question → retrieval → generation | RAG triad: context relevance, faithfulness, answer relevance | Shared questions; capture the actual context passed to generation and its answer | `evals/pipeline/test_rag.py` |
 
-Expect faithfulness high (~90%) before any work and answer relevancy lower. Tune the system prompt against the failure reasons, 3–4 rounds.
+> Outcome: evaluate the connected flow using the same metric definitions. A drop is evidence to inspect retrieval, context assembly, and configuration; it does not by itself prove overfitting.
 
-→ `eval:rag`
+### Stage 3 — Application evaluation
 
-## Stage 3 — pipeline eval
+| User journey / requirement | Evaluations | Dataset / evidence | Proposed file |
+|---|---|---|---|
+| Ask a question and follow up | Correctness against reviewed facts; completeness of required points (separate G-Eval rubrics) | Shared answer cases plus short conversations where needed; expected abstention for unavailable facts | `evals/application/test_chatbot.py` |
+| Malicious instructions in a user question or retrieved document | Scoped safety: follow the policy while still answering legitimate requests | Adversarial and benign controls; mixed-intent cases where meaningful; expected behavior | `evals/application/test_safety.py` |
+| Complete the same requests | Latency, token/cost usage, errors and timeouts (instrumentation) | Reuse application runs; provider usage and confirmed budgets | Reuse `evals/application/test_chatbot.py` |
 
-Wire retriever and generator into `rag_pipeline.py`. The eval is structurally identical to 2b with **one change**: `retrieval_context` now comes from the live retriever inside the pipeline, not the golden set.
+> Outcome: verify answers are correct and complete, assess relevant safety behavior, and measure operating cost and reliability. Add access-isolation scenarios if private or tiered documents actually exist. A small offline run does not establish production tail latency or rare-event safety.
 
-```python
-answer, retrieved = pipeline.run(row["question"])
-LLMTestCase(input=row["question"], actual_output=answer, retrieval_context=retrieved)
-```
+Start with shared answer cases. Separate safety/conversation datasets only when their evidence differs; tags suffice otherwise. The RAG triad is not a substitute for correctness or completeness.
 
-Add `ContextualRelevancyMetric` — the third leg of the Triad, and the one that catches intra-chunk noise the component evals can't see.
+## Application methods across project types
 
-If faithfulness and answer relevancy hold up here versus stage 2b, your prompt tuning generalized. If they drop, it was overfit to golden-context phrasing.
+Correctness compares to authoritative expected facts, labels, results, or state. Completeness checks required fields, requested sub-tasks, or reviewed key points; do not reward length or demand unsupported details. For an unanswerable request, appropriate clarification or abstention can satisfy the expected behavior.
 
-→ `eval:rag`
+Use code for exact outcomes and G-Eval for qualitative criteria with reviewed evidence. Keep distinct scores where they expose distinct failures. On a single-label classifier, one label comparison may cover both correctness and completeness; record this rather than adding an LLM judge. Pipeline and application stages may reuse that result if they add no new behavior.
 
-## Stage 4 — application quality
+Safety evaluates actual trust boundaries and unacceptable outcomes. An authorization assertion is stronger evidence of access enforcement than asking a judge whether a response sounds safe. Use sandbox tools and benign controls; do not silently skip applicable security checks to save effort.
 
-Now the product-level questions: is the answer *right*, is it *complete*, does it sound like us? These need judgment rather than claim-counting, which means custom G-Eval metrics.
+Operations reuse existing runs: measure end-to-end duration, available usage/cost, errors and timeouts. TTFT applies only to streaming. Include failed requests in reliability counts; unavailable usage means cost is unknown, not zero. Separate application inference cost from evaluator cost. Load `eval:ops` for a requested SLO study or regression gate; do not create a load-testing system for a starter suite.
 
-All three run in one `evaluate()` call over the same test cases. Track them separately — do not blend them into a composite.
+## Implement and resume
 
-→ `eval:geval`
+1. Prepare and validate the current stage's data using [golden-datasets.md](golden-datasets.md). Review candidate labels before treating them as ground truth.
+2. Reuse the project's test runner and dependency manager. Check selected DeepEval APIs against the installed version; keep Python in an isolated eval environment if the app is in another language. No DeepEval dependency for deterministic-only checks.
+3. Implement the smallest selected eval and verify it runs against the real component. Use controlled fixtures for isolation; never pass golden answers into the application as a shortcut. Mocks validate wiring but do not establish live model quality.
+4. Check a known-good and known-bad example against each materially different evaluator. Calibrate qualitative judges against human judgments before relying on thresholds; do not tune only to make the application pass.
+5. Run the current stage, save outputs and results, explain failures and coverage limits, then proceed to the next agreed stage. Keep failures visible; unresolved data/credential issues remain blocked, not passed. Do not silently change application behavior when the request is evaluation setup.
+6. Record case IDs, versions of data/corpus/model/prompt/judge, settings, counts, scores/directions, reasons, errors, timing, and available costs. Reuse existing reporting. Check held-out cases after tuning; repeat ambiguous results as budget permits.
+7. Keep commands and stage status in existing eval notes or `evals/README.md`, including what is completed, failed, pending, or awaiting review. "Continue" resumes from these artifacts. A new component changes only the affected plan rows and coverage.
 
-## Stage 5 — safety
-
-Build one golden set per failure mode, each containing adversarial, benign, **and** mixed-intent cases. Use built-in metrics where one fits (toxicity, PII), custom G-Eval metrics where the built-in is too coarse (scope adherence, system-prompt leakage).
-
-Watch the polarity: toxicity is lower-is-better, PII leakage is higher-is-better.
-
-→ `eval:safety`
-
-## Stage 6 — operational
-
-No LLM judge, no golden data — plain instrumentation. Latency with percentiles and TTFT, cost per query extrapolated to monthly, reliability with categorized errors. Compare against the budgets you set at stage 0.
-
-→ `eval:ops`
-
-## Stage 7 — tie it together
-
-**Metric registry** — every metric gets a direction and a noise threshold:
-
-```python
-METRICS = {
-    "contextual_recall":  {"direction": "higher", "noise": 0.04},
-    "faithfulness":       {"direction": "higher", "noise": 0.03},
-    "toxicity":           {"direction": "lower",  "noise": 0.05},
-    "pii_leakage":        {"direction": "higher", "noise": 0.08},
-    "latency_p95_ms":     {"direction": "lower",  "noise": 300},
-    "cost_per_query":     {"direction": "lower",  "noise": 0.002},
-}
-```
-
-Derive each noise value empirically: run the full suite 5–10 times with **nothing changed**, take the standard deviation per metric, set the threshold to 2×. Anything smaller than that after a real change is noise.
-
-**The loop:**
-
-```
-run_suite.py                    → baseline.json      (unchanged system)
-   ↓  make one change
-run_suite.py                    → candidate.json
-compare.py baseline candidate   → per-metric improved / flat / regressed
-promote.py                      → approve | review | block
-```
-
-Moved into GitHub Actions, that *is* CI for an LLM app. `promote.py`'s verdict is the deploy gate.
-
-→ `eval:ops`
-
-## Stage 8 — online
-
-Ship, then keep evaluating. Log every turn non-blocking with PII masked; dashboard the captured signals directly; sample the computed ones (stratified, oversampling thumbs-down and escalated conversations) and run reference-free metrics over them. Compare against a baseline, since correctness is unmeasurable without an answer key. Feed every real failure back into the golden sets.
-
-→ `eval:foundations`
-
-## Build order summary
-
-| Stage | Produces | Skill |
-|---|---|---|
-| 0 | codebase understood, requirements + safety policy | `eval:foundations`, `eval:benchmark` |
-| 1 | golden datasets | `eval:foundations` |
-| 2 | retriever and generator evals | `eval:rag` |
-| 3 | pipeline eval (Triad) | `eval:rag` |
-| 4 | correctness, completeness, style | `eval:geval` |
-| 5 | toxicity, leakage, scope | `eval:safety` |
-| 6 | latency, cost, reliability | `eval:ops` |
-| 7 | registry, suite, compare, promote, CI | `eval:ops` |
-| 8 | logging, sampling, drift, feedback loop | `eval:foundations` |
-
-Stages 0–3 are the minimum that beats vibe testing. Stages 4–6 are what you add as the app gets real users. Stage 7 is what stops you shipping regressions, and it's worth building as soon as more than one person touches the system.
+Use dedicated eval files for meaningful boundaries, not a file per metric. A normal test-runner command selecting a stage is enough. Add shared helpers only when needed by multiple files. A saved baseline and per-metric comparison suffice until automated CI is requested; never overwrite the baseline simply because a new run finished.

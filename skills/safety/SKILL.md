@@ -2,10 +2,14 @@
 name: safety
 description: Test an LLM application for toxicity, PII and content leakage, scope drift, prompt injection, and jailbreaks — scoping the real attack surface first, designing adversarial/benign/mixed test datasets, choosing built-in vs custom evaluators, and hardening with layered guardrails. Use whenever someone asks about LLM security, safety testing, red teaming, guardrails, jailbreak or prompt-injection resistance, PII leakage, system-prompt extraction, toxic output, or keeping a bot on-topic — and also when they describe the symptom instead ("someone got our bot to do X", "can it leak our data", "how do I stop people misusing this"). Applies to any LLM app: RAG, agents, chatbots, classifiers.
 created_at: 2026-09-08T12:27:56Z
-updated_at: 2026-09-08T12:27:56Z
+updated_at: 2026-09-08T13:10:00Z
 ---
 
 # Safety Evals for LLM Applications
+
+Safety is a dimension of the **application stage**, not a separate stage. Load this when the plan's application table has a safety row, and build only the scenarios that match a real trust boundary in the system you traced.
+
+Prefer direct evidence over judged impressions wherever the outcome is checkable: an authorization assertion proves access enforcement; asking a judge whether a response "sounds safe" does not. Use sandboxed tools and fixture state for anything that would otherwise cause a real side effect.
 
 ## Scope the attack surface first
 

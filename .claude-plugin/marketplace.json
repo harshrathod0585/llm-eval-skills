@@ -1,12 +1,14 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "eval",
-  "description": "LLM evaluation skills: foundations, model benchmarking, and RAG eval pipelines.",
-  "owner": { "name": "harshrathod" },
+  "description": "Skills for evaluating LLM applications \u2014 discovery, staged planning, and implementation with DeepEval.",
+  "owner": {
+    "name": "harshrathod"
+  },
   "plugins": [
     {
       "name": "eval",
-      "description": "Build and run LLM evaluation pipelines: eval strategy, model benchmarking and selection, and staged RAG evaluation.",
+      "description": "Plan and implement evaluations for any LLM application: read the codebase, propose a staged component/pipeline/application plan, then build the smallest useful suite.",
       "source": "./",
       "category": "ai"
     }

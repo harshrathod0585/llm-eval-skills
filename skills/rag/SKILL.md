@@ -2,7 +2,7 @@
 name: rag
 description: Evaluate the retrieval half of a RAG application — contextual precision, contextual recall, contextual relevancy, faithfulness, answer relevancy, and the RAG Triad — plus the tuning levers (chunk size and overlap, embedding model, reranker, k) and the diagnostic logic that maps a low score to the component responsible. Use whenever someone is testing, tuning, or debugging a RAG or retrieval-augmented system, mentions DeepEval, RAGAS, the RAG Triad, faithfulness, groundedness, hallucination testing, or golden datasets for retrieval — and also when they describe the symptom instead ("my chatbot makes things up", "how do I know if my retriever is good", "my answers got worse after I changed chunking", "it retrieves the wrong documents"). Also use when deciding whether a bad answer came from the retriever or the generator.
 created_at: 2026-09-08T12:27:56Z
-updated_at: 2026-09-08T12:27:56Z
+updated_at: 2026-09-08T13:10:00Z
 ---
 
 # Evaluating RAG Retrieval and Generation
@@ -11,20 +11,24 @@ This skill covers the part of an eval suite that only exists because you have a 
 
 RAG fails in layers, and one end-to-end score can't tell you which layer broke. The discipline is **localizing failure**: measure components in isolation, then the wired pipeline. Each stage answers a question the other structurally cannot.
 
-## The two stages
+## Component and pipeline stages
 
-Build in this order. Diagnose in reverse — stage 2 tells you *something is wrong*, stage 1 tells you *where*.
+These are the RAG-specific rows of the component and pipeline stages planned in `eval:foundations`. Build in this order; diagnose in reverse — the pipeline stage tells you *something is wrong*, the component stage tells you *where*.
 
-| Stage | Under test | Metrics | Golden data |
+| Stage | Under test | Metrics | Evidence needed |
 |---|---|---|---|
-| **1a. Retriever** | retriever alone | contextual precision, contextual recall | question + ideal answer |
-| | | contextual relevancy | questions only |
-| **1b. Generator** | generator alone, fed *golden* context | faithfulness, answer relevancy | question + golden context |
-| **2. Pipeline** | retriever + generator wired together | RAG Triad | questions only |
+| **Component** — retriever | retriever alone | contextual relevancy | questions only |
+| | | contextual precision, contextual recall | question + reviewed ideal answer |
+| **Component** — generator | generator alone, fed *controlled* context | faithfulness, answer relevancy | question + reviewed context |
+| **Pipeline** | retriever + generator connected | RAG Triad | questions only |
 
-**The isolation rule that makes stage 1 work:** when evaluating the generator, feed it golden context, *not* live retriever output. Otherwise a bad score is ambiguous — you can't tell whether the generator hallucinated or the retriever handed it garbage. Only at stage 2 do you connect them.
+Start with the reference-free checks — contextual relevancy on the retriever, faithfulness and answer relevancy on the generator. Add contextual precision and recall when a coverage requirement or an observed missing-evidence failure justifies the labeling cost, not by default.
 
-**What changes between 1b and 2:** nothing but the source of `retrieval_context`. Faithfulness and answer relevancy use identical formulas at both levels — golden context at 1b, live retriever output at 2. If scores hold across that swap, your generator prompt generalizes. If they drop sharply, you overfit it to the golden context's phrasing.
+**The isolation rule that makes the component stage work:** when evaluating the generator, feed it controlled context, *not* live retriever output. Otherwise a bad score is ambiguous — you can't tell whether the generator misused adequate context or the retriever handed it garbage.
+
+**What changes at the pipeline stage:** nothing but the source of `retrieval_context`. Faithfulness and answer relevancy use identical definitions at both levels — controlled context in isolation, live retriever output when connected. A drop between them is evidence to inspect retrieval, context assembly, and configuration. It is not by itself proof that the generator prompt was overfit.
+
+**The triad does not establish correctness.** All three metrics can pass on an answer that is grounded, relevant, and factually wrong, because the retrieved context was wrong. Correctness and completeness are application-stage concerns needing reviewed expected answers — see `eval:geval`.
 
 ## Which metric needs a reference
 
@@ -108,10 +112,10 @@ This skill is retrieval-specific. Everything below applies to any LLM app and li
 
 | Need | Skill |
 |---|---|
-| What to measure at all, eval methods, offline vs online, monitoring | `eval:foundations` |
-| Correctness, completeness, style, or any custom judgment metric | `eval:geval` |
-| Toxicity, PII leakage, scope drift, prompt injection, red teaming | `eval:safety` |
-| Latency, cost, reliability, regression testing, CI gates | `eval:ops` |
+| Discovery, the staged plan, eval methods, dataset preparation | `eval:foundations` |
+| Correctness, completeness, or any custom judgment metric | `eval:geval` |
+| Applicable safety and authorization scenarios | `eval:safety` |
+| Latency, cost, reliability; regression gating when requested | `eval:ops` |
 | Choosing which model to use in the first place | `eval:benchmark` |
 
 ## Provenance

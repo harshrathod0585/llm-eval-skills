@@ -1,124 +1,54 @@
-# Discovery: deriving the eval plan from the codebase
+# Discovery: derive the plan from the codebase
 
-Do this before proposing any metric. An eval plan built on assumptions about the architecture measures the wrong components, and the user has to correct you after you've written code.
+## Trace before classifying
 
-The goal of this pass is to answer four questions: **what kind of app is this, what are its components, what already exists, and what constraints apply.** Everything downstream follows from those.
+Read repository instructions, manifests and relevant entry points. If a project knowledge graph exists, use its query/navigation facilities first, then verify relevant source files. Otherwise use `rg --files` and targeted `rg` searches in the project's languages; do not assume Python or install discovery tooling.
 
-## Step 1 — find the entry point and trace the flow
+Follow a representative request through preprocessing, routing, model calls, retrieval, tools, memory, output validation, and the application response. Trace alternate routes that materially change success or risk, including failure handling and authorization. Record actual file/function references. Inspect the complete relevant paths, not every unrelated file in the repository.
 
-Start from how a request enters and follow it to the response. The shape of that path *is* the component decomposition you'll evaluate.
+For each candidate boundary, ask: can it fail independently, would an isolated check diagnose something useful, and is it already tested? Dependencies alone do not establish behavior: a vector database package may be unused, and an LLM application may combine several flows.
 
-```bash
-# entry points
-rg -l "FastAPI|Flask|streamlit|gradio|@app\.(route|post|get)|def main" --type py
+Inventory existing evals, tests, fixtures, reviewed examples, tracing, runtime interfaces, and framework versions. Reuse them. A non-Python application can keep native deterministic tests or expose its existing local API/CLI to a small Python DeepEval runner if qualitative judging is needed; do not rewrite the application.
 
-# the LLM call itself — where generation happens
-rg -n "ChatOpenAI|ChatAnthropic|AsyncOpenAI|OpenAI\(|anthropic\.|litellm|invoke\(|\.chat\.completions" --type py
-```
+## Choose the minimum useful method
 
-Read the files those hit. You are looking for the sequence: what happens to the user's input before it reaches the model, and what happens to the model's output before it reaches the user. Each transformation is a component that can fail independently and therefore deserves its own eval.
+These are choices, not a checklist. Select from observed behavior and product requirements.
 
-## Step 2 — classify the application type
-
-The presence of specific dependencies is strong evidence. Check both the code and the manifest.
-
-```bash
-rg -n "chroma|pinecone|qdrant|weaviate|faiss|pgvector|milvus" --type py      # vector store → RAG
-rg -n "as_retriever|similarity_search|RecursiveCharacterTextSplitter|embed"  # retrieval → RAG
-rg -n "tools=|@tool|bind_tools|function_call|tool_choice|ToolNode"           # tool use → agent
-rg -n "langgraph|StateGraph|crewai|autogen|AgentExecutor"                    # orchestration → agent
-rg -n "ConversationBufferMemory|chat_history|messages\[|session_id|thread_id" # multi-turn
-cat requirements.txt pyproject.toml package.json 2>/dev/null
-```
-
-Map what you find to the component metrics:
-
-| Evidence | App type | Component metrics | Skill |
+| Observed component | Starting evaluation | Evidence / method | Add only when needed |
 |---|---|---|---|
-| Vector store + retriever | RAG | contextual precision/recall/relevancy, faithfulness, answer relevancy | `eval:rag` |
-| Tool bindings, agent loop | Agent | tool selection, parameter correctness, task completion, trajectory, error recovery | see below |
-| Fixed label set, enum output | Classifier | accuracy, precision/recall/F1 — **programmatic, no LLM judge** | `eval:foundations` |
-| Long input → short output | Summarizer | faithfulness against source doc, coverage | `eval:geval` |
-| Message history, session state | Multi-turn | knowledge retention, role adherence, conversational relevancy | — |
-| SQL/JSON output, schema | Structured | execution-based or schema comparison, never string match | `eval:benchmark` |
+| Retriever | Context relevance | Question + actual retrieved passages; DeepEval contextual relevancy | Labeled recall for missing evidence; precision/ranking checks for noisy ranking |
+| Grounded generator | Faithfulness and answer relevance | Controlled context + generated answer; DeepEval | Separate correctness and completeness at application level |
+| Classifier/router | Expected label/action | Exact comparisons; accuracy with per-class counts | Precision/recall/F1 when class imbalance or error costs require them |
+| Extractor | Expected field values | Native schema tests + normalized field comparisons | Field precision/recall for optional or repeated values |
+| Summarizer | Source faithfulness and required-point coverage | Source + reviewed key points; rubric or direct checks | Style only for an explicit product requirement |
+| Tool selector | Allowed tool and correct arguments | Expected acceptable calls + argument values; assertions | Order only when the task requires it; do not reject valid alternate paths |
+| Task agent | Expected final state | Sandboxed task fixture; direct outcome assertions | Trace-based judging only for outcomes that cannot be checked directly |
+| SQL/code generator | Correct execution result | Read-only/sandbox execution against controlled fixtures | SQL row ordering only when required; JSON schema alone does not prove semantic correctness |
+| Conversation/memory | Required information used across turns | A few reviewed conversations | Separate memory eval only if isolation reveals a distinct failure |
 
-Most real apps are a combination. A support agent with a knowledge base is RAG *and* agent, and needs both metric sets.
+Unknown application types: derive a check from the output contract and expected user outcome. Do not force a closest template or fabricate a framework metric.
 
-## Step 3 — inventory what already exists
+## Establish product requirements
 
-Don't rebuild what's there, and don't assume nothing is.
+Extract intended behavior, model/configuration, tools, permissions, and relevant limits from code and docs. Prompts describe intent, not authoritative truth. Ask only what remains decision-relevant: what is correct, what information is required, what actions are forbidden, and what latency/cost limits apply? Bundle concise questions; users need not choose metric names.
 
-```bash
-ls -d tests/ evals/ eval/ benchmarks/ 2>/dev/null
-rg -l "deepeval|ragas|langsmith|langfuse|promptfoo|braintrust" .
-fd -e json -e csv -e jsonl . | rg -i "golden|eval|test.*set|ground.?truth"
-rg -n "LLMTestCase|GEval|evaluate\(|assert_test" --type py
-```
+Use the available evidence to draft the plan while identifying unknowns. Do not invent business rules or an SLO. Unconfirmed numeric thresholds remain proposed; missing budget numbers need not block a measured baseline. For side-effecting tools, plan mocks or sandbox state rather than real writes.
 
-Also check for signals already being captured that you can build on: existing logging, a tracing integration, thumbs-up/down storage, latency instrumentation. Production logs are the best golden-dataset source there is, and if they already exist, stage 1 gets much cheaper.
+## Present the plan
 
-## Step 4 — extract the constraints
+Use the three tables in [end-to-end.md](end-to-end.md), populated with actual components, connected flows, user journeys, code references, necessary methods, evidence, and proposed files. Application evaluation must explicitly cover correctness, completeness, safety, and operations, even if a dimension is already covered or is inapplicable with a reason.
 
-These set thresholds and decide which risk categories are in scope. Some are readable from the code; the rest you ask about.
+Explain what each metric catches in one phrase. Identify shared versus separate datasets, review status, held-out needs, applicable safety cases, and cost/configuration assumptions. State online evaluation is unavailable. Do not copy all rows from an example into a different application.
 
-**From the code:**
-- Model and provider in use → cost per token, and whether swaps are easy
-- `temperature` settings → whether eval runs will be reproducible
-- `k`, chunk size, chunk overlap → the tuning levers available
-- System prompts → what behavior is already being asked for, and what the eval should therefore verify
-- Tool access → whether unsafe-action safety modes are in scope at all
-- Auth/tiering logic → whether content-leakage evals matter
+Get agreement before creating data or evals. Then implement the first stage; show results before progressing. The user may approve all offline stages in advance, so do not repeatedly ask for the same permission.
 
-**Ask the user:**
-- Who uses this — internal, public, tiered? Sets the safety scope.
-- Query volume → cost budget math
-- Latency expectation → the SLO
-- What does a bad answer cost? A medical or legal answer and a casual suggestion carry different correctness bars.
+## DeepEval verification
 
-## Step 5 — propose before building
+Inspect the project's installed version and use matching official docs/source before writing code. Verify constructors, required fields, supported model configuration, score polarity, and error behavior. Pin/record the dependency and judge version used. Never infer semantics solely from a class name or copy a threshold from an example.
 
-Present the plan and get agreement before writing eval code. It's a short message and it prevents building the wrong suite:
+- [Metrics and method selection](https://deepeval.com/docs/metrics-introduction)
+- [RAG triad](https://deepeval.com/guides/guides-rag-triad)
+- [G-Eval and evaluation parameters](https://deepeval.com/docs/metrics-llm-evals)
+- [Tool correctness](https://deepeval.com/docs/metrics-tool-correctness)
 
-- The app type and its components, as you traced them
-- Which metrics per component, and why those
-- What golden data is needed, in what shape, and how many rows
-- What's in and out of scope for safety, given the actual attack surface
-- Which stages to build now vs later
-
-Users routinely correct the component decomposition at this point. That correction is cheap here and expensive after implementation.
-
-## Step 6 — implement with DeepEval
-
-DeepEval is the default choice: broader scope than RAGAS (agents, multi-turn, non-LLM apps), PyTest-styled so it's familiar, and actively converging on being the standard. RAGAS is equally capable for pure RAG — if a project already uses it, don't migrate for its own sake.
-
-```bash
-pip install deepeval          # or: uv add deepeval
-export OPENAI_API_KEY=...     # judge model credentials
-```
-
-Structure the eval files as described in `end-to-end.md`: one per component level, each exposing a `run()` function, invoked as a module (`python3 -m evals.eval_retriever`) so imports from `src/` resolve. Add `__init__.py` to both directories — a missing one is the most common first error.
-
-Build in this order, running each before writing the next:
-
-1. One eval file for the most important component, with 15 golden rows. Confirm it runs end to end.
-2. Expand golden data to 50+.
-3. Add remaining components.
-4. Add pipeline level.
-5. Add application quality, then safety, then ops.
-6. Wire the registry, suite, compare, and promote.
-
-Getting one metric running against real data beats a complete suite that has never executed. The first run always surfaces something — a path issue, a field mismatch, an empty retrieval context — and finding that on one metric is much faster than on twelve.
-
-## Agent component metrics
-
-The source lectures are RAG-focused and don't build these, so treat this section as general practice rather than lecture-derived.
-
-| Metric | Question | Approach |
-|---|---|---|
-| Tool selection correctness | right tool for the request? | compare called tool against expected; DeepEval `ToolCorrectnessMetric` |
-| Parameter correctness | right arguments? | schema validation plus value comparison — largely programmatic |
-| Task completion | did it finish the job? | DeepEval `TaskCompletionMetric`, or a custom G-Eval over the final state |
-| Trajectory quality | sane path, or 14 steps for a 3-step job? | step count against a reference, plus G-Eval on the trace |
-| Error recovery | survives a failed tool call? | inject failures deliberately and assert recovery |
-
-Agents raise the stakes on `eval:safety` rather than lowering them: tool access adds hijacking and unsafe-action modes that a chat-only interface doesn't have, and operational evals need step caps and timeouts to bound runaway loops.
+Load only the specialized references selected by the plan. If documentation or credentials are unavailable, validate what can run locally and state exactly what remains unverified.

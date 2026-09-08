@@ -2,7 +2,7 @@
 name: benchmark
 description: Choose an LLM for a specific application by reading benchmarks and leaderboards critically and then running a custom eval on your own data. Covers the eight capability axes, what each major benchmark (MMLU, GPQA, MMLU-Pro, TruthfulQA, SimpleQA, HLE, GSM8K, AGIEval, SWE-bench) actually measures and where it's saturated or contaminated, how to read leaderboards without being misled by configuration gaming and human-preference bias, cost and latency modeling including prompt caching, and the full shortlist-then-bake-off procedure. Use whenever someone asks which model to use, compares models, mentions a benchmark or leaderboard by name, is deciding between providers or between hosted and open-weight models, needs to justify a model choice to a team, or asks whether a headline benchmark claim is trustworthy. Also use when someone is about to pick a model purely from leaderboard rank.
 created_at: 2026-09-08T12:27:56Z
-updated_at: 2026-09-08T12:27:56Z
+updated_at: 2026-09-08T13:10:00Z
 ---
 
 # Benchmarks, Leaderboards, and Model Selection

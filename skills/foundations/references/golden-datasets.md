@@ -1,88 +1,53 @@
-# Golden datasets
+# Golden datasets: evidence matched to the check
 
-The golden dataset is the artifact everything else depends on. A weak one makes every downstream metric decorative — it'll report a healthy pass rate while production burns.
+Support multiple datasets by component, scenario, or risk category. Do not require a separate file per metric: one case can support several checks. Split files when evidence, review ownership, or execution environments differ; use category tags for filtering otherwise.
 
-## Shape depends on the metric
+## Evidence requirements
 
-There is no single golden dataset. Different metrics need different columns, and building one universal file wastes effort on fields most metrics ignore.
+The table lists stored evidence plus runtime outputs; exact framework field requirements must be verified against the installed version. Reference-free means no ideal answer, not no evidence.
 
-| Metric | Columns needed |
-|---|---|
-| Contextual recall / precision | `question`, `ideal_answer` |
-| Contextual relevancy | `question` |
-| Faithfulness | `question`, `golden_context` |
-| Answer relevancy | `question` |
-| Correctness, completeness | `question`, `ideal_answer` |
-| Style | `question` |
-| Toxicity | `question`, `category` (adversarial/benign/mixed) |
-| Leakage, scope adherence | `question`, `category`, `expected_action` |
-| Classification tasks | `input`, `label` |
-| Text-to-SQL | `question`, `golden_query`, `order_sensitive` |
+| Evaluation | Stored case evidence | Captured during the run |
+|---|---|---|
+| Context relevance | Question | Retrieved passages |
+| DeepEval contextual recall / precision | Question + reviewed ideal answer | Retrieved passages; required test-case fields |
+| Deterministic recall@k / precision@k | Query + labeled relevant document IDs + corpus version and retrieval unit | Ranked IDs at k |
+| Faithfulness | Question + controlled context for isolated generator tests | Answer + exact context supplied to generator; pipeline uses live context |
+| Answer relevance | Question | Answer |
+| Correctness | Input + reviewed answer, label, expected result, or state | Actual answer/result/state |
+| Completeness | Input + required facts, fields, or sub-task outcomes | Actual answer/result/state |
+| Summarization | Source + reviewed essential points | Summary |
+| Tool behavior | Input + fixture state + acceptable tools/arguments/outcomes | Calls, results, final state |
+| Conversation | Scenario/turns + expected behavior; valid alternatives | Full relevant transcript and task outcome |
+| Safety | Policy, adversarial/benign/mixed category, expected behavior; permission fixture if applicable | Response, attempted actions, resulting state |
+| Operations | Representative inputs; budget/configuration if known | Timing, usage, errors/timeouts; no golden answer required |
 
-Note how many need only questions. Reference-free metrics are cheaper to build for and are the only ones that can also run in production.
+DeepEval's claim-based contextual recall is not document recall@k. Name the method precisely. Stable document IDs are valid retrieval labels when linked to a corpus version. Chunk IDs tied to one chunking setup must be regenerated/remapped when that setup changes. Store source IDs/spans or reviewed content when possible; content labels also need review after source changes.
 
-## The rule that saves you re-work
+## Minimal case contract
 
-**Never key a golden set to chunk IDs, row indices, or anything tied to your current configuration.**
+Use the project's existing JSONL/JSON/CSV format. Each case needs a stable ID, input, applicable evidence fields, and enough metadata to identify category, source/provenance, review status, and split. Dataset-level metadata can hold shared corpus version, policy, and schema; do not duplicate it on every row.
 
-It's the intuitive first design — record which chunk contains the answer, then check whether the retriever returned it. It works exactly until you change chunk size or overlap, which is the most common tuning lever you have. Then every ID shifts and the whole dataset is void. Re-annotating means a human reading hundreds of chunks per question, once per experiment.
+A RAG case may be as small as:
 
-Key to *content* instead — an ideal answer, or the golden context as text. The information doesn't move when chunk boundaries do, so the set survives re-chunking and you build it once.
+```json
+{"id":"returns-01","input":"How long do I have to return an item?","golden_context":["Returns are accepted within 30 days of delivery."],"expected_output":"Within 30 days of delivery.","required_points":["30 days","from delivery"],"category":"returns","source":"returns-policy-v2","review_status":"candidate","split":"development"}
+```
 
-The exception: if documents are cleanly siloed one-topic-per-document and your chunking parameters are frozen for good, ID-based works. That's rarer than it sounds.
+This is synthetic example data, not an approved policy. At runtime, store `actual_output` and the actual `retrieval_context` separately. Never substitute golden context into a pipeline result or send expected answers to the system being evaluated.
 
-## Sizing
+## Prepare and validate
 
-| Size | Use |
-|---|---|
-| 15 | enough to learn the loop; expect visible run-to-run noise |
-| 30–50 | working minimum for a real decision |
-| 50–500 | the normal range for an application task |
+1. Reuse reviewed domain examples and existing fixtures first. Authorized historical logs may supply realistic inputs; redact sensitive data before sending to an external judge and respect the project's data rules.
+2. Draft missing examples from identified sources. Synthetic labels remain **candidate** until a qualified reviewer or an authoritative deterministic oracle validates them. Ask for review of the actual examples, not blanket approval that generated data is "golden".
+3. Validate parseability, unique IDs, required evidence for selected metrics, allowed labels, source availability, and contradictory/duplicate cases. Check expected outputs mechanically where possible. Executable SQL is not necessarily correct SQL; use controlled read-only fixtures to validate intended results.
+4. Include representative normal cases and the edge/failure cases the product needs. Keep adversarial stress-test results separate from typical-traffic estimates. Report per-category counts, not only a blended average.
+5. Separate development/tuning from held-out validation before tuning. Keep paraphrases, turns from one conversation, and closely related source examples in the same split to avoid leakage. If data is too small, label the run exploratory rather than claiming an independent validation.
+6. Route cases only to compatible metrics. Missing correctness labels block correctness scoring, not reference-free checks that have enough evidence. Report excluded and pending-review counts; do not fill missing labels with the application's own answer.
 
-Smaller sets swing more. A 10–15 row set can move a metric 20 points between identical runs purely from size — which is why noise thresholds must be derived empirically rather than assumed.
+Start with a small reviewed sample sufficient to validate wiring and rubric behavior; size further runs by coverage, risk, uncertainty, and budget. No fixed row count establishes accuracy. A tiny set is a smoke test, not proof of rare-failure safety. When oversampling important cases, do not present the unweighted score as the production success rate.
 
-Bigger isn't free: every row costs LLM-judge calls on every run, and that recurs on every regression run forever. Budget it as eval infrastructure cost.
+## Maintain without adding infrastructure
 
-## Coverage
+Version datasets alongside eval code. Record corpus/policy changes and re-review affected labels. Keep held-out results separate from tuning feedback; cases exposed during tuning become development cases. Save reported failures as candidates for review, deduplicate them, and add the ones that extend coverage.
 
-**Match the real input distribution.** Not every question should be hard. A rough split for 50 rows: 10 easy, 20 medium, 20 hard. An all-hard set is a stress test, not an eval, and it'll make a fine system look broken.
-
-**Cover the shapes that exist in your traffic** — different query types, different phrasings, multi-part questions, questions with no answer in the corpus.
-
-**Tag rows by category** (pricing, refunds, policy, whatever your domains are) and track sub-scores per category. An aggregate hides a total failure in one category behind success in four others.
-
-**Include the cases that will actually break it:** ambiguous phrasing, code-mixed language, questions whose answer isn't in the corpus, and — for safety sets — adversarial, benign, and mixed-intent prompts.
-
-## Construction methods, best first
-
-**1. Hand-authored by someone who knows the corpus.** Highest quality, doesn't scale. The author thinks of a plausible question, finds the source material, reads it, and composes the ideal answer. Hiring someone external is slower than it looks, because they lack the corpus knowledge that makes this fast.
-
-**2. LLM-drafted, one row at a time, each reviewed.** What most people should actually do. Give the model your corpus, ask for one question/answer pair, review it against what you know is true, accept or delete, repeat. The one-at-a-time constraint is deliberate — bulk generation moves the quality burden to a review pass nobody does carefully, and an LLM will happily write confident golden answers about things your corpus never covered.
-
-**3. Synthetic generation in bulk.** DeepEval ships a `Synthesizer`. In practice the output skews toward whatever is textually prominent in the corpus rather than what users actually ask — producing academic, over-formal questions no real user would type. Usable as a starting draft, but the human review overhead often cancels the time saved.
-
-**4. Mined from production logs.** The best long-term source and unavailable at cold start. Once live, harvest real queries — especially ones that failed, got a thumbs-down, or triggered an escalation — and fold them in. This is the loop that stops the dataset going stale.
-
-Most projects use 2 to start and 4 forever after.
-
-## Validate mechanically where you can
-
-Where a golden answer is machine-checkable, check it before trusting it. For text-to-SQL, execute every golden query against the real database and confirm it runs — that catches schema drift and typos in seconds.
-
-Be clear about what this proves: syntactic validity, not correctness. A query that runs and returns the wrong answer passes this gate. Correctness still needs human review.
-
-## Golden datasets are living
-
-Two forces make a frozen dataset wrong over time:
-
-**Drift.** The world changes — prices, policies, curriculum, product names — while the dataset holds the old answers. Offline scores stay green while real users get wrong answers. This is the dangerous failure, because nothing looks broken. Re-verify golden answers whenever the underlying source material changes.
-
-**Coverage gaps.** Production surfaces question types you never imagined. Every one that fails should become a row.
-
-Treat the dataset as versioned code, not a one-time deliverable. Reviewing it on a schedule is cheaper than discovering it went stale via a user complaint.
-
-## Who writes the ideal answers
-
-A domain expert, or an LLM draft that a domain expert verified. Never unverified LLM output — you'd be measuring your system against a hallucination and calling the result ground truth.
-
-For subjective dimensions where no single correct answer exists, you don't need ideal answers at all. Write a rubric instead: a numeric scale with a description per band. That's the reference-free path, and it's the right shape for style, helpfulness, and tone.
+Review judge agreement on examples spanning good, bad, partial, and ambiguous outputs. Distinguish defective labels from application errors and rubric errors. Keep the judge, rubric, and settings recorded for comparisons; a passing score does not certify that the evaluator is accurate.
