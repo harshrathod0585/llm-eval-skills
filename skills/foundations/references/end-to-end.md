@@ -39,9 +39,13 @@ project/
 
 Two structural notes that pay off later. Give every eval file a `run()` function rather than top-level procedural code under `if __name__ == "__main__"` — otherwise `run_suite.py` can't drive them. And keep the four quality evals as separate files while merging the three safety and three ops evals into one file each; the quality evals are edited constantly during tuning, the others aren't.
 
-## Stage 0 — decide what you're building
+## Stage 0 — understand the system you're evaluating
 
 Before any code. Skipping this produces an eval suite that measures whatever was easy to measure.
+
+**If the app already exists, read it first.** Trace the entry point to the response and let that path define the components — don't assume the decomposition. `references/discovery.md` covers the inspection pass, how to classify the app type from its dependencies, and what to inventory before proposing anything. The layout above is RAG-shaped because that's the worked example; an agent or a classifier decomposes differently, and only stages 2–3 change.
+
+Then answer:
 
 1. What is the task, exactly?
 2. What are the success criteria, stated as metrics or rubrics?
@@ -173,7 +177,7 @@ Ship, then keep evaluating. Log every turn non-blocking with PII masked; dashboa
 
 | Stage | Produces | Skill |
 |---|---|---|
-| 0 | requirements + safety policy | `eval:foundations`, `eval:benchmark` |
+| 0 | codebase understood, requirements + safety policy | `eval:foundations`, `eval:benchmark` |
 | 1 | golden datasets | `eval:foundations` |
 | 2 | retriever and generator evals | `eval:rag` |
 | 3 | pipeline eval (Triad) | `eval:rag` |

@@ -1,11 +1,21 @@
 ---
 name: foundations
-description: Decide what to evaluate in an LLM application and how — choosing between programmatic checks, human review, and LLM-as-judge; reference-based vs reference-free evals; offline vs online evaluation; building golden datasets; structuring multiple eval pipelines across component, workflow, and application levels; and wiring production monitoring, sampling, drift detection, and the feedback loop back into the golden set. Use this whenever someone is starting an eval effort or is unsure what to measure — "how do I know if my LLM app is any good", "how should I test this before shipping", "what metrics should I track", "how do I set up an LLM judge", "how do I monitor this in production" — and before reaching for a framework, since picking the wrong eval shape is more expensive than picking the wrong library. Carries the end-to-end walkthrough — project layout and the full build order from empty repo through golden datasets, component and pipeline evals, application quality, safety, operational evals, regression gating and production monitoring — so start here for "how do I build the whole thing" or "what does an eval pipeline actually look like". Also use when someone is relying on vibe testing, or when an eval suite looks healthy while users complain.
+description: Work out what to evaluate in an LLM application and how — starting by reading the actual codebase to identify its components and application type (RAG, agent, classifier, summarizer, multi-turn), then choosing metrics to match. Covers programmatic vs human vs LLM-as-judge, reference-based vs reference-free, offline vs online, golden dataset construction, and production monitoring with sampling and drift detection. Carries the end-to-end walkthrough — project layout and the full build order from empty repo through golden datasets, component and pipeline evals, application quality, safety, operational evals, regression gating and monitoring. Start here for "how do I evaluate my app", "what should I measure", "how do I test this before shipping", "what does an eval pipeline actually look like", or "set up evals for this codebase". Also use when someone is relying on vibe testing, or when an eval suite looks healthy while users complain.
 created_at: 2026-09-08T12:27:56Z
 updated_at: 2026-09-08T12:27:56Z
 ---
 
 # LLM Evaluation Foundations
+
+## Before anything else: read the codebase
+
+When someone asks for help evaluating *their* application, do not propose metrics from the description alone. Trace the actual code first — find the entry point, follow a request to the response, and let that path tell you what the components are. A plan built on an assumed architecture measures the wrong things, and the user has to correct you after you've written code.
+
+`references/discovery.md` is that pass: what to grep for, how to classify the app type from its dependencies, how to inventory existing evals and golden data, which constraints to read from code versus ask about, and how to implement with DeepEval once the plan is agreed.
+
+**Propose the plan and get agreement before writing eval code.** Users routinely correct the component decomposition, and that correction is cheap before implementation and expensive after.
+
+This matters most because RAG is only one shape. Agents, classifiers, summarizers, and multi-turn chatbots each decompose differently, and only the component layer changes — everything from application quality downward is identical across all of them.
 
 ## Start here for the whole picture
 
@@ -153,6 +163,7 @@ An improvement from 92% to 99% on your target metric is only good news if nothin
 
 ## Reference files
 
+- `references/discovery.md` — inspect a codebase, classify the app type, derive the plan, implement with DeepEval
 - `references/end-to-end.md` — project layout and the full eight-stage build order
 - `references/golden-datasets.md` — dataset shapes per metric, construction, sizing, staleness
 

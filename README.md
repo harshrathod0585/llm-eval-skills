@@ -32,6 +32,7 @@ What's genuinely RAG-only is the part that requires a retriever — contextual p
 
 ## Where the depth is
 
+- `eval:foundations` → `references/discovery.md` — read a codebase, classify the app, derive the plan
 - `eval:foundations` → `references/end-to-end.md` — the whole build, stage 0 to 8, with project layout
 - `eval:foundations` → `references/golden-datasets.md` — dataset shape per metric, and the chunk-ID trap
 - `eval:rag` → `references/metrics.md` — every metric: which test-case fields it needs, how it's computed, what a low score implies, and the ranked-precision worked example
