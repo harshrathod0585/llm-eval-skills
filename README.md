@@ -20,6 +20,8 @@ claude plugin marketplace add harshrathod0585/llm-eval-skills
 claude plugin install eval@eval
 ```
 
+**New to this? Start with `/eval:foundations`** — it carries the end-to-end walkthrough and routes you into the others at the right stage.
+
 Invoke with `/eval:rag`, `/eval:geval`, etc. — or just describe the problem and the right skill triggers.
 
 ## Why the split
@@ -30,6 +32,8 @@ What's genuinely RAG-only is the part that requires a retriever — contextual p
 
 ## Where the depth is
 
+- `eval:foundations` → `references/end-to-end.md` — the whole build, stage 0 to 8, with project layout
+- `eval:foundations` → `references/golden-datasets.md` — dataset shape per metric, and the chunk-ID trap
 - `eval:rag` → `references/metrics.md` — every metric: which test-case fields it needs, how it's computed, what a low score implies, and the ranked-precision worked example
 - `eval:geval` — why naive "score this 1–10" judging swings between runs, and the two things G-Eval does about it
 - `eval:ops` — 2×stddev noise thresholds, and why you must register each metric's direction before comparing anything

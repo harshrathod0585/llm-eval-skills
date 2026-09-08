@@ -1,11 +1,15 @@
 ---
 name: foundations
-description: Decide what to evaluate in an LLM application and how — choosing between programmatic checks, human review, and LLM-as-judge; reference-based vs reference-free evals; offline vs online evaluation; building golden datasets; structuring multiple eval pipelines across component, workflow, and application levels; and wiring production monitoring, sampling, drift detection, and the feedback loop back into the golden set. Use this whenever someone is starting an eval effort or is unsure what to measure — "how do I know if my LLM app is any good", "how should I test this before shipping", "what metrics should I track", "how do I set up an LLM judge", "how do I monitor this in production" — and before reaching for a framework, since picking the wrong eval shape is more expensive than picking the wrong library. Also use when someone is relying on vibe testing, or when an eval suite looks healthy while users complain.
+description: Decide what to evaluate in an LLM application and how — choosing between programmatic checks, human review, and LLM-as-judge; reference-based vs reference-free evals; offline vs online evaluation; building golden datasets; structuring multiple eval pipelines across component, workflow, and application levels; and wiring production monitoring, sampling, drift detection, and the feedback loop back into the golden set. Use this whenever someone is starting an eval effort or is unsure what to measure — "how do I know if my LLM app is any good", "how should I test this before shipping", "what metrics should I track", "how do I set up an LLM judge", "how do I monitor this in production" — and before reaching for a framework, since picking the wrong eval shape is more expensive than picking the wrong library. Carries the end-to-end walkthrough — project layout and the full build order from empty repo through golden datasets, component and pipeline evals, application quality, safety, operational evals, regression gating and production monitoring — so start here for "how do I build the whole thing" or "what does an eval pipeline actually look like". Also use when someone is relying on vibe testing, or when an eval suite looks healthy while users complain.
 created_at: 2026-09-08T12:27:56Z
 updated_at: 2026-09-08T12:27:56Z
 ---
 
 # LLM Evaluation Foundations
+
+## Start here for the whole picture
+
+If the question is "how do I actually build this end to end", read `references/end-to-end.md` — it carries the project layout and the full build order across all eight stages, naming which skill to load at each one. This file explains the *decisions* behind that sequence; that file is the sequence itself.
 
 ## What an eval actually is
 
@@ -103,6 +107,8 @@ This matters operationally because reference-free metrics are the only ones that
 - **Categories:** track sub-scores per category (pricing, refunds, curriculum) so a regression in one is visible instead of averaged away.
 - **Living artifact:** every production failure gets added.
 
+Read `references/golden-datasets.md` for the per-metric column shapes, construction methods ranked by quality, sizing guidance, and why a chunk-ID-keyed set voids itself the first time you retune.
+
 ## Offline vs online
 
 **Offline** runs before deployment against a fixed golden dataset. It answers *is this application correct?*
@@ -144,6 +150,11 @@ Changing anything means re-running everything. A prompt edit asking the bot to b
 An improvement from 92% to 99% on your target metric is only good news if nothing else moved. Always check the rest.
 
 **CI gating:** automate the offline suite as a release gate — above threshold deploys, below blocks and notifies. Pick the maturity level that matches your team: manual comparison, then experiment tracking with config logged alongside metrics, then full CI gating. The concept — compare against a baseline, decide pass/fail — applies at every level.
+
+## Reference files
+
+- `references/end-to-end.md` — project layout and the full eight-stage build order
+- `references/golden-datasets.md` — dataset shapes per metric, construction, sizing, staleness
 
 ## Where to go next
 
